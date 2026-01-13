@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Gacha Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800&display=swap');
+
+        body {
+            font-family: 'M PLUS Rounded 1c', sans-serif;
+            background: #1a1a2e;
+            overflow-x: hidden;
+            color: white;
+            min-height: 100vh;
+        }
+
+        /* アニメーション設定 */
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translate(0, 0) rotate(0deg);
+            }
+
+            25% {
+                transform: translate(-8px, 8px) rotate(-8deg);
+            }
+
+            50% {
+                transform: translate(8px, -8px) rotate(8deg);
+            }
+
+            75% {
+                transform: translate(-8px, -8px) rotate(-4deg);
+            }
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+
+        .animate-shake {
+            animation: shake 0.12s infinite;
+        }
+
+        .animate-float {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .rarity-ssr {
+            background: linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8b00ff);
+            background-size: 400% 400%;
+            animation: rainbow-bg 5s ease infinite;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+        }
+
+        @keyframes rainbow-bg {
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        #particle-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .hidden-el {
+            display: none !important;
+        }
+
+        /* 結果カードのスタイル */
+        .result-item-card {
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+    </style>
+</head>
+
+<body class="flex flex-col items-center justify-center p-4">
+
+    <!-- 背景装飾 -->
+    <div class="fixed inset-0 opacity-20 pointer-events-none">
+        <div class="absolute top-10 left-10 w-32 h-32 bg-purple-500 rounded-full blur-3xl"></div>
+        <div class="absolute bottom-10 right-10 w-48 h-48 bg-blue-500 rounded-full blur-3xl"></div>
+    </div>
+
+    <!-- メインコンテナ -->
+    <div id="app" class="relative z-10 w-full max-w-2xl p-6 text-center">
+
+        <!-- ヘッダー -->
+        <h1
+            class="text-4xl font-extrabold mb-8 italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-pink-500">
+            ULTIMATE GACHA
+        </h1>
+
+        <!-- ガチャ表示エリア -->
+        <div id="display-area" class="min-h-[400px] flex items-center justify-center relative">
+
+            <!-- 待機状態 -->
+            <div id="state-idle" class="flex flex-col items-center">
+                <div class="text-9xl animate-float cursor-pointer select-none">🎁</div>
+                <p class="mt-6 text-blue-300 text-lg font-bold animate-pulse">運を天に任せよ！</p>
+            </div>
+
+            <!-- 演出中（シェイク演出） -->
+            <div id="state-animating" class="hidden-el flex flex-col items-center">
+                <div id="capsule-visual" class="text-9xl animate-shake drop-shadow-[0_0_30px_rgba(255,255,255,0.6)]">
+                    ⚪
+                </div>
+                <p class="mt-8 text-white text-xl font-black tracking-widest italic">CHANCE...</p>
+            </div>
+
+            <!-- 単発結果 -->
+            <div id="state-result-single"
+                class="hidden-el flex flex-col items-center scale-0 transition-transform duration-500">
+                <div id="result-card" class="bg-white text-gray-900 rounded-3xl p-8 shadow-2xl w-72 transform rotate-2">
+                    <div id="result-rarity"
+                        class="text-sm font-bold px-4 py-1 rounded-full w-max mx-auto mb-4 text-white">SSR</div>
+                    <div id="result-icon" class="text-8xl my-6">🔥</div>
+                    <div id="result-name" class="text-2xl font-black">アイテム名</div>
+                </div>
+            </div>
+
+            <!-- 10連結果 -->
+            <div id="state-result-multi"
+                class="hidden-el grid grid-cols-2 sm:grid-cols-5 gap-3 p-4 w-full scale-0 transition-transform duration-500">
+                <!-- JSで10個生成 -->
+            </div>
+
+            <!-- フラッシュエフェクト -->
+            <div id="flash"
+                class="fixed inset-0 bg-white opacity-0 pointer-events-none z-[60] transition-opacity duration-150">
+            </div>
+        </div>
+
+        <!-- ボタンエリア -->
+        <div class="mt-12 max-w-md mx-auto space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button id="btn-draw-1"
+                    class="bg-gradient-to-b from-blue-400 to-blue-600 hover:from-blue-300 hover:to-blue-500 text-white font-black py-4 rounded-2xl shadow-[0_6px_0_#1e40af] active:shadow-none active:translate-y-[6px] transition-all text-lg">
+                    1回引く
+                </button>
+                <button id="btn-draw-10"
+                    class="bg-gradient-to-b from-yellow-400 to-yellow-600 hover:from-yellow-300 hover:to-yellow-500 text-gray-900 font-black py-4 rounded-2xl shadow-[0_6px_0_#b45309] active:shadow-none active:translate-y-[6px] transition-all text-lg">
+                    10連ガチャ！
+                </button>
+            </div>
+            <button id="btn-reset"
+                class="text-gray-500 hover:text-white text-sm font-bold uppercase tracking-widest transition-colors">
+                結果を閉じる
+            </button>
+        </div>
+
+        <!-- 履歴 -->
+        <div class="mt-12 text-left bg-black/30 p-4 rounded-xl">
+            <h2 class="text-xs font-bold text-gray-500 mb-3 uppercase tracking-widest flex justify-between">
+                <span>獲得履歴</span>
+                <span id="stat-count">Total: 0</span>
+            </h2>
+            <div id="history" class="flex flex-wrap gap-2 max-h-32 overflow-y-auto pr-2">
+                <!-- 履歴アイコン -->
+            </div>
+        </div>
+    </div>
+
+    <!-- パーティクルコンテナ -->
+    <div id="particle-container"></div>
+
+    <script>
+        const ITEMS = [
+            { name: "ただの石ころ", icon: "🪨", rarity: "N", weight: 60, color: "bg-gray-400" },
+            { name: "鋼のつるぎ", icon: "🗡️", rarity: "R", weight: 25, color: "bg-blue-500" },
+            { name: "魔法の盾", icon: "🛡️", rarity: "SR", weight: 12, color: "bg-purple-600" },
+            { name: "神鳥フェニックス", icon: "🐦‍🔥", rarity: "SSR", weight: 3, color: "rarity-ssr" }
+        ];
+
+        // 要素の取得
+        const stateIdle = document.getElementById('state-idle');
+        const stateAnimating = document.getElementById('state-animating');
+        const stateResultSingle = document.getElementById('state-result-single');
+        const stateResultMulti = document.getElementById('state-result-multi');
+        const capsuleVisual = document.getElementById('capsule-visual');
+        const flash = document.getElementById('flash');
+        const historyContainer = document.getElementById('history');
+        const statCount = document.getElementById('stat-count');
+
+        const btnDraw1 = document.getElementById('btn-draw-1');
+        const btnDraw10 = document.getElementById('btn-draw-10');
+        const btnReset = document.getElementById('btn-reset');
+
+        let isDrawing = false;
+        let totalDrawn = 0;
+
+        // ガチャロジック
+        function getRandomItem() {
+            const totalWeight = ITEMS.reduce((sum, item) => sum + item.weight, 0);
+            let random = Math.random() * totalWeight;
+            for (const item of ITEMS) {
+                if (random < item.weight) return item;
+                random -= item.weight;
+            }
+            return ITEMS[0];
+        }
+
+        // パーティクル生成（SSR用）
+        function createParticles(count = 40) {
+            for (let i = 0; i < count; i++) {
+                const p = document.createElement('div');
+                p.className = 'absolute w-3 h-3 rounded-sm';
+                p.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 60%)`;
+                p.style.left = '50%';
+                p.style.top = '50%';
+
+                const angle = Math.random() * Math.PI * 2;
+                const velocity = 4 + Math.random() * 12;
+                const vx = Math.cos(angle) * velocity;
+                const vy = Math.sin(angle) * velocity;
+
+                document.getElementById('particle-container').appendChild(p);
+
+                let opacity = 1;
+                let x = 0;
+                let y = 0;
+                const gravity = 0.15;
+                let curVy = vy;
+
+                const anim = () => {
+                    x += vx;
+                    curVy += gravity;
+                    y += curVy;
+                    opacity -= 0.015;
+                    p.style.transform = `translate(${x}px, ${y}px) rotate(${x * 2}deg)`;
+                    p.style.opacity = opacity;
+
+                    if (opacity > 0) {
+                        requestAnimationFrame(anim);
+                    } else {
+                        p.remove();
+                    }
+                };
+                requestAnimationFrame(anim);
+            }
+        }
+
+        async function playGacha(count) {
+            if (isDrawing) return;
+            isDrawing = true;
+            toggleButtons(false);
+
+            const results = Array.from({ length: count }, () => getRandomItem());
+            const hasSSR = results.some(r => r.rarity === 'SSR');
+            const hasSR = results.some(r => r.rarity === 'SR');
+
+            // 1. 演出開始
+            resetView();
+            stateIdle.classList.add('hidden-el');
+            stateAnimating.classList.remove('hidden-el');
+
+            // 期待度演出：一番レアなものに合わせる
+            if (hasSSR) {
+                capsuleVisual.innerText = '🌈';
+                capsuleVisual.classList.add('drop-shadow-[0_0_40px_rgba(255,215,0,0.8)]');
+            } else if (hasSR) {
+                capsuleVisual.innerText = '💎';
+                capsuleVisual.classList.remove('drop-shadow-[0_0_40px_rgba(255,215,0,0.8)]');
+            } else {
+                capsuleVisual.innerText = '⚪';
+                capsuleVisual.classList.remove('drop-shadow-[0_0_40px_rgba(255,215,0,0.8)]');
+            }
+
+            // 2. 溜め時間
+            await new Promise(r => setTimeout(r, 1800));
+
+            // 3. フラッシュ
+            flash.style.opacity = '1';
+            await new Promise(r => setTimeout(r, 150));
+
+            // 4. 結果表示
+            stateAnimating.classList.add('hidden-el');
+            flash.style.opacity = '0';
+
+            if (count === 1) {
+                showSingleResult(results[0]);
+            } else {
+                showMultiResult(results);
+            }
+
+            // 背景とパーティクル
+            if (hasSSR) {
+                createParticles(count === 10 ? 80 : 40);
+                document.body.style.backgroundColor = '#2d1b4d';
+            } else {
+                document.body.style.backgroundColor = '#1a1a2e';
+            }
+
+            // 履歴更新
+            results.forEach(item => {
+                totalDrawn++;
+                const histEl = document.createElement('div');
+                histEl.className = `w-8 h-8 rounded flex items-center justify-center text-sm shadow-lg shrink-0 ${item.color}`;
+                histEl.innerText = item.icon;
+                histEl.title = item.name;
+                historyContainer.prepend(histEl);
+            });
+            statCount.innerText = `Total: ${totalDrawn}`;
+
+            isDrawing = false;
+            toggleButtons(true);
+        }
+
+        function showSingleResult(item) {
+            const card = document.getElementById('result-card');
+            const rLabel = document.getElementById('result-rarity');
+            const rIcon = document.getElementById('result-icon');
+            const rName = document.getElementById('result-name');
+
+            rLabel.innerText = item.rarity;
+            rLabel.className = `text-sm font-bold px-4 py-1 rounded-full w-max mx-auto mb-4 text-white ${item.color}`;
+            rIcon.innerText = item.icon;
+            rName.innerText = item.name;
+
+            stateResultSingle.classList.remove('hidden-el');
+            setTimeout(() => {
+                stateResultSingle.classList.remove('scale-0');
+                stateResultSingle.classList.add('scale-100');
+            }, 50);
+        }
+
+        function showMultiResult(items) {
+            stateResultMulti.innerHTML = '';
+            items.forEach((item, index) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = `result-item-card bg-white/10 backdrop-blur-md rounded-xl p-3 flex flex-col items-center border border-white/10`;
+                wrapper.innerHTML = `
+                    <div class="text-xs font-bold px-2 rounded ${item.color} mb-2">${item.rarity}</div>
+                    <div class="text-4xl mb-1">${item.icon}</div>
+                    <div class="text-[10px] font-bold truncate w-full text-center text-blue-100">${item.name}</div>
+                `;
+                stateResultMulti.appendChild(wrapper);
+            });
+
+            stateResultMulti.classList.remove('hidden-el');
+            setTimeout(() => {
+                stateResultMulti.classList.remove('scale-0');
+                stateResultMulti.classList.add('scale-100');
+            }, 50);
+        }
+
+        function toggleButtons(enabled) {
+            btnDraw1.disabled = !enabled;
+            btnDraw10.disabled = !enabled;
+            btnDraw1.style.opacity = enabled ? '1' : '0.5';
+            btnDraw10.style.opacity = enabled ? '1' : '0.5';
+        }
+
+        function resetView() {
+            stateResultSingle.classList.add('scale-0', 'hidden-el');
+            stateResultMulti.classList.add('scale-0', 'hidden-el');
+            stateIdle.classList.remove('hidden-el');
+            document.body.style.backgroundColor = '#1a1a2e';
+        }
+
+        btnDraw1.addEventListener('click', () => playGacha(1));
+        btnDraw10.addEventListener('click', () => playGacha(10));
+        btnReset.addEventListener('click', resetView);
+
+    </script>
+</body>
+
+</html>
